@@ -60,6 +60,18 @@ export interface World {
   burgs: (BriefBurg | number)[];
   provinces: (BriefProvince | number)[];
   cultures: { i: number; name: string }[];
+  religions: { i: number; name: string }[];
+  biomes: { name: string }[];
+  /** Per-cell data: who owns it, who lives there, what grows there */
+  cells: {
+    state: ArrayLike<number>;
+    culture: ArrayLike<number>;
+    religion: ArrayLike<number>;
+    biome: ArrayLike<number>;
+    pop: ArrayLike<number>; // rural population points
+    burg: ArrayLike<number>;
+    area: ArrayLike<number>;
+  };
   chronicle: string[][];
   year: number;
   era: string;
@@ -72,6 +84,7 @@ export interface World {
 
 const CHRONICLE_ENTRIES = 5;
 const LOG_TURNS = 3;
+const SHARES = 4; // peoples, faiths and biomes named per land; the rest is "others"
 
 const count = (value: number): string => Math.round(value).toLocaleString("en-US");
 const percent = (rate = 0): string => `${Math.round(rate * 100)}%`;
@@ -102,6 +115,70 @@ export function isKnown(own: BriefState, other: BriefState, fog: Game["settings"
   return Boolean(own.neighbors?.includes(other.i)) || (own.diplomacy?.[other.i] ?? "Unknown") !== "Unknown";
 }
 
+/** What a land is made of: its peoples and faiths by population, its biomes by area */
+export interface Land {
+  cultures: [string, number][];
+  religions: [string, number][];
+  biomes: [string, number][];
+}
+
+/** Shares of every state's land, in one pass over the cells */
+export function surveyLands(world: World): Map<number, Land> {
+  const { state, culture, religion, biome, pop, burg, area } = world.cells;
+  const totals = new Map<
+    number,
+    { cultures: Map<number, number>; religions: Map<number, number>; biomes: Map<number, number> }
+  >();
+  const add = (map: Map<number, number>, key: number, value: number) => map.set(key, (map.get(key) ?? 0) + value);
+  for (let i = 0; i < state.length; i++) {
+    const owner = state[i];
+    if (!owner) continue;
+    const land = totals.get(owner) ?? { cultures: new Map(), religions: new Map(), biomes: new Map() };
+    totals.set(owner, land);
+    const town = burg[i] ? world.burgs[burg[i]] : undefined;
+    const people = world.people(pop[i], typeof town === "object" ? (town.population ?? 0) : 0);
+    add(land.cultures, culture[i], people);
+    add(land.religions, religion[i], people);
+    add(land.biomes, biome[i], area[i]);
+  }
+  const shares = (map: Map<number, number>, name: (id: number) => string): [string, number][] => {
+    const total = [...map.values()].reduce((sum, value) => sum + value, 0);
+    if (!total) return [];
+    return [...map.entries()]
+      .sort((a, b) => b[1] - a[1])
+      .map(([id, value]) => [name(id), value / total] as [string, number])
+      .filter(([, share]) => share >= 0.005);
+  };
+  return new Map(
+    [...totals.entries()].map(([owner, land]) => [
+      owner,
+      {
+        cultures: shares(land.cultures, id => world.cultures.find(item => item.i === id)?.name ?? "Unknown"),
+        religions: shares(land.religions, id =>
+          id ? (world.religions.find(item => item.i === id)?.name ?? "Unknown") : "No faith"
+        ),
+        biomes: shares(land.biomes, id => world.biomes[id]?.name ?? "Unknown")
+      }
+    ])
+  );
+}
+
+const share = ([name, value]: [string, number]): string => `${name} ${Math.round(value * 100)}%`;
+
+/** The leading shares with the rest summed, e.g. "Durinn 61%, Khund 24%, others 15%" */
+function shareList(items: [string, number][]): string {
+  const shown = items.slice(0, SHARES);
+  const rest = items.slice(SHARES).reduce((sum, [, value]) => sum + value, 0);
+  return [...shown.map(share), ...(rest >= 0.005 ? [`others ${Math.round(rest * 100)}%`] : [])].join(", ");
+}
+
+/** The leading names only, for a neighbour: "Durinn and Khund" */
+const leading = (items: [string, number][], limit = 2): string =>
+  items
+    .slice(0, limit)
+    .map(([name]) => name)
+    .join(" and ");
+
 export function buildBriefing(game: Game, stateId: number, world: World): string {
   const own = world.states[stateId];
   if (!alive(own)) throw new Error(`State ${stateId} is not on this map`);
@@ -109,16 +186,17 @@ export function buildBriefing(game: Game, stateId: number, world: World): string
   const burgs = world.burgs.filter((burg): burg is BriefBurg => typeof burg === "object" && !burg.removed);
   const others = world.states.filter(state => alive(state) && state.i !== stateId);
   const name = (id: number): string => (id === REFEREE ? "The referee" : (world.states[id]?.name ?? `state:${id}`));
+  const lands = surveyLands(world);
 
   const sections = [
     `# Turn ${game.current.turn} · ${world.year} ${world.era}`.trim(),
     `Each turn covers ${game.settings.turnLength || "one season"}. You rule **${label(own)}**.`,
     nation?.persona.trim() && `## Who you are\n\n${nation.persona.trim()}`,
     game.settings.rules.trim() && `## House rules\n\n${game.settings.rules.trim()}`,
-    realm(own, burgs, world, game.settings.burgs),
+    realm(own, burgs, world, game.settings.burgs, lands.get(stateId)),
     forces(own, burgs, world),
     intruders(own, others, burgs, world),
-    powers(own, others, game.settings.fog, world),
+    powers(own, others, game.settings.fog, world, lands),
     chronicle(world.chronicle),
     sinceLastTurn(game, stateId, name),
     log(game.history.slice(0, -1).slice(-LOG_TURNS), stateId),
@@ -138,7 +216,7 @@ function nearest(x: number, y: number, burgs: BriefBurg[]): BriefBurg | undefine
 }
 
 /** `listed` largest burgs are named, with every port and province seat; 0 names them all */
-function realm(own: BriefState, burgs: BriefBurg[], world: World, listed: number): string {
+function realm(own: BriefState, burgs: BriefBurg[], world: World, listed: number, land?: Land): string {
   const mine = burgs.filter(burg => burg.state === own.i).sort((a, b) => (b.population ?? 0) - (a.population ?? 0));
   const capital = mine.find(burg => burg.capital);
   const provinces = (own.provinces ?? [])
@@ -158,6 +236,9 @@ function realm(own: BriefState, burgs: BriefBurg[], world: World, listed: number
     `Population: ${count(world.people(rural, urban))} (${count(world.people(rural, 0))} rural, ${count(world.people(0, urban))} urban)`,
     `Land: ${world.area(own.area ?? 0)}, ${mine.length} burgs, ${mine.filter(burg => burg.port).length} ports`,
     `Treasury: ${world.money(own.treasury ?? 0)}; sales tax ${percent(own.salesTax)}, poll tax ${own.pollTax ?? 0} per head`,
+    land?.cultures.length ? `Peoples: ${shareList(land.cultures)}` : "",
+    land?.religions.length ? `Faiths: ${shareList(land.religions)}` : "",
+    land?.biomes.length ? `Terrain: ${shareList(land.biomes)}` : "",
     provinces.length ? `Provinces: ${provinces.map(province => province.name).join(", ")}` : "",
     towns.length
       ? `${named.length < mine.length ? `Your ${named.length} main burgs (the largest, every port and province seat)` : "Your burgs"}: ${towns.join("; ")}`
@@ -206,7 +287,13 @@ function intruders(own: BriefState, others: BriefState[], burgs: BriefBurg[], wo
   return lines.length ? `## Foreign forces on your soil\n\n${lines.join("\n")}` : "";
 }
 
-function powers(own: BriefState, others: BriefState[], fog: Game["settings"]["fog"], world: World): string {
+function powers(
+  own: BriefState,
+  others: BriefState[],
+  fog: Game["settings"]["fog"],
+  world: World,
+  lands: Map<number, Land>
+): string {
   const known = others.filter(state => isKnown(own, state, fog));
   const distant = others.filter(state => !known.includes(state));
   const lines = known.map(state => {
@@ -215,7 +302,10 @@ function powers(own: BriefState, others: BriefState[], fog: Game["settings"]["fo
       own.neighbors?.includes(state.i) ? "borders you" : "",
       state.form ?? "",
       `${rough(world.people(state.rural ?? 0, state.urban ?? 0))} people`,
-      `${rough(troops(state))} troops`
+      `${rough(troops(state))} troops`,
+      lands.get(state.i)?.cultures.length ? `peoples: ${leading(lands.get(state.i)!.cultures)}` : "",
+      lands.get(state.i)?.religions.length ? `faith: ${leading(lands.get(state.i)!.religions, 1)}` : "",
+      lands.get(state.i)?.biomes.length ? `land: ${leading(lands.get(state.i)!.biomes)}` : ""
     ];
     return `- ${label(state)}: ${facts.filter(Boolean).join("; ")}`;
   });

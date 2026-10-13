@@ -44,7 +44,22 @@ function world(): World {
       { i: 2, name: "Orn", state: 2, x: 90, y: 90, population: 12 }
     ],
     provinces: [0],
-    cultures: [],
+    cultures: [
+      { i: 1, name: "Durinn" },
+      { i: 2, name: "Khund" }
+    ],
+    religions: [{ i: 1, name: "Menite" }],
+    biomes: [{ name: "Marine" }, { name: "Grassland" }, { name: "Taiga" }],
+    // three cells of Orwin (two Durinn grassland, one Khund taiga, the capital on cell 0), two of Kahor
+    cells: {
+      state: [1, 1, 1, 2, 2],
+      culture: [1, 1, 2, 2, 2],
+      religion: [1, 1, 0, 0, 1],
+      biome: [1, 1, 2, 2, 1],
+      pop: [10, 10, 10, 10, 10],
+      burg: [1, 0, 0, 2, 0],
+      area: [100, 100, 200, 100, 100]
+    },
     chronicle: [["War declaration", "Orwin declared a war on its enemy Kahor"]],
     year: 1042,
     era: "WE",
@@ -72,6 +87,16 @@ describe("briefing", () => {
     );
     expect(text).toContain("## Foreign forces on your soil\n\n- Kahor: Raiders, about 2,400 troops, near Vel");
     expect(text).toContain("This is the first turn");
+  });
+
+  test("tells a nation what peoples, faiths and terrain make up its land and its neighbours'", () => {
+    const text = buildBriefing(gameWith(1), 1, world());
+    expect(text).toContain("- Peoples: Durinn 83%, Khund 17%");
+    expect(text).toContain("- Faiths: Menite 83%, No faith 17%");
+    expect(text).toContain("- Terrain: Grassland 50%, Taiga 50%");
+    expect(text).toContain(
+      "Kingdom of Kahor (state:2): at war; borders you; Monarchy; about 120,000 people; about 2,400 troops; peoples: Khund; faith: No faith; land: Taiga and Grassland"
+    );
   });
 
   test("names the largest burgs, every port and every province seat, up to the referee's limit", () => {
