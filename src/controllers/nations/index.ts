@@ -207,6 +207,12 @@ function setupHtml(game: Game): string {
           <option value="full" ${game.settings.fog === "full" ? "selected" : ""}>every state</option>
         </select>
       </label>
+      <label class="nRow">Nations know by name their
+        <select data-field="burgs">
+          ${[10, 25, 50, 100, 0].map(value => `<option value="${value}" ${game.settings.burgs === value ? "selected" : ""}>${value ? `${value} largest burgs` : "burgs, all of them"}</option>`).join("")}
+        </select>
+        <span class="nHint">plus every port and province seat</span>
+      </label>
       <textarea rows="3" data-field="rules" placeholder="House rules every nation reads, e.g. how far an army marches in a turn, what recruiting costs.">${escapeHtml(game.settings.rules)}</textarea>
     </section>
     <section>
@@ -426,6 +432,7 @@ function onChange(event: Event): void {
   else if (field === "model" && nation) nation.model = input.value;
   else if (field === "defaultModel") game.settings.defaultModel = input.value;
   else if (field === "fog") game.settings.fog = input.value === "full" ? "full" : "known";
+  else if (field === "burgs") game.settings.burgs = Number(input.value) || 0;
   else if (field === "clerkModel") saveConnection({ ...getConnection("anthropic"), model: input.value });
   else if (field === "delivered") {
     const letter = game.current.submissions.find(item => item.state === Number(state))?.letters[Number(index)];

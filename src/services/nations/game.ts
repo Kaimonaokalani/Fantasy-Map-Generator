@@ -59,6 +59,7 @@ export interface Settings {
   turnLength: string;
   rules: string; // house rules every nation reads
   fog: "full" | "known"; // "known" hides the details of states a nation has no relations with
+  burgs: number; // how many of its largest burgs a nation is told by name; 0 for all
   defaultModel: string;
 }
 
@@ -74,6 +75,7 @@ export interface Game {
 }
 
 export const DEFAULT_MODEL = "claude-opus-5-5";
+export const DEFAULT_BURGS = 25;
 const STORAGE_KEY = "fmg-nations-games";
 const HISTORY_LIMIT = 200;
 
@@ -95,7 +97,7 @@ export function create(mapId: number, mapName: string): Game {
     mapId,
     mapName,
     nations: [],
-    settings: { turnLength: "one season", rules: "", fog: "known", defaultModel: DEFAULT_MODEL },
+    settings: { turnLength: "one season", rules: "", fog: "known", burgs: DEFAULT_BURGS, defaultModel: DEFAULT_MODEL },
     current: emptyTurn(1),
     history: [],
     usage: noUsage()

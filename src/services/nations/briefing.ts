@@ -47,11 +47,18 @@ export interface BriefBurg {
   removed?: boolean;
 }
 
+export interface BriefProvince {
+  i: number;
+  name: string;
+  burg?: number; // the province's seat
+  removed?: boolean;
+}
+
 /** The map as a briefing reads it, with the app's own formatters */
 export interface World {
   states: BriefState[];
   burgs: (BriefBurg | number)[];
-  provinces: ({ i: number; name: string; removed?: boolean } | number)[];
+  provinces: (BriefProvince | number)[];
   cultures: { i: number; name: string }[];
   chronicle: string[][];
   year: number;
@@ -63,7 +70,6 @@ export interface World {
   money(amount: number): string;
 }
 
-const TOP_BURGS = 8;
 const CHRONICLE_ENTRIES = 5;
 const LOG_TURNS = 3;
 
@@ -109,7 +115,7 @@ export function buildBriefing(game: Game, stateId: number, world: World): string
     `Each turn covers ${game.settings.turnLength || "one season"}. You rule **${label(own)}**.`,
     nation?.persona.trim() && `## Who you are\n\n${nation.persona.trim()}`,
     game.settings.rules.trim() && `## House rules\n\n${game.settings.rules.trim()}`,
-    realm(own, burgs, world),
+    realm(own, burgs, world, game.settings.burgs),
     forces(own, burgs, world),
     intruders(own, others, burgs, world),
     powers(own, others, game.settings.fog, world),
@@ -131,17 +137,20 @@ function nearest(x: number, y: number, burgs: BriefBurg[]): BriefBurg | undefine
   return best;
 }
 
-function realm(own: BriefState, burgs: BriefBurg[], world: World): string {
+/** `listed` largest burgs are named, with every port and province seat; 0 names them all */
+function realm(own: BriefState, burgs: BriefBurg[], world: World, listed: number): string {
   const mine = burgs.filter(burg => burg.state === own.i).sort((a, b) => (b.population ?? 0) - (a.population ?? 0));
   const capital = mine.find(burg => burg.capital);
   const provinces = (own.provinces ?? [])
     .map(id => world.provinces[id])
-    .filter((province): province is { i: number; name: string } => typeof province === "object" && !province.removed)
-    .map(province => province.name);
+    .filter((province): province is BriefProvince => typeof province === "object" && !province.removed);
+  const seats = new Map(provinces.map(province => [province.burg, province.name]));
   const culture = world.cultures.find(item => item.i === own.culture)?.name;
   const { rural = 0, urban = 0 } = own;
-  const towns = mine.slice(0, TOP_BURGS).map(burg => {
-    const tags = [burg.capital ? "capital" : "", burg.port ? "port" : ""].filter(Boolean).join(", ");
+  const named = mine.filter((burg, rank) => !listed || rank < listed || burg.port || seats.has(burg.i));
+  const towns = named.map(burg => {
+    const seat = seats.has(burg.i) ? `seat of ${seats.get(burg.i)}` : "";
+    const tags = [burg.capital ? "capital" : "", burg.port ? "port" : "", seat].filter(Boolean).join(", ");
     return `${burg.name} (${count(world.people(0, burg.population ?? 0))}${tags ? `, ${tags}` : ""})`;
   });
   const lines = [
@@ -149,8 +158,10 @@ function realm(own: BriefState, burgs: BriefBurg[], world: World): string {
     `Population: ${count(world.people(rural, urban))} (${count(world.people(rural, 0))} rural, ${count(world.people(0, urban))} urban)`,
     `Land: ${world.area(own.area ?? 0)}, ${mine.length} burgs, ${mine.filter(burg => burg.port).length} ports`,
     `Treasury: ${world.money(own.treasury ?? 0)}; sales tax ${percent(own.salesTax)}, poll tax ${own.pollTax ?? 0} per head`,
-    provinces.length ? `Provinces: ${provinces.join(", ")}` : "",
-    towns.length ? `Largest burgs: ${towns.join("; ")}` : ""
+    provinces.length ? `Provinces: ${provinces.map(province => province.name).join(", ")}` : "",
+    towns.length
+      ? `${named.length < mine.length ? `Your ${named.length} main burgs (the largest, every port and province seat)` : "Your burgs"}: ${towns.join("; ")}`
+      : ""
   ];
   return `## Your realm\n\n${lines
     .filter(Boolean)

@@ -22,7 +22,7 @@ Open **Tools → AI Nations** (or search for "AI Nations").
 2. **Which states do AI models rule?** Tick them. Each gets its own model, so one state can run on
    `claude-opus-5-5` and another on `claude-fable-5-1`. In the box under each, describe the ruler: character, goals,
    grudges, what they would never do. States you leave unticked are yours to play or to leave idle.
-3. **Rules of the game.** How long a turn is, how much of the world a nation sees, and house rules every nation
+3. **Rules of the game.** How long a turn is, how much of the world a nation sees, how many of its burgs it knows by name, and house rules every nation
    reads, such as how far an army marches in a turn or what a regiment costs.
 
 ## Playing a turn
@@ -41,7 +41,8 @@ Open **Tools → AI Nations** (or search for "AI Nations").
 
 ## What a nation knows
 
-Only its briefing: its government, population, treasury and taxes, provinces and largest burgs; every regiment
+Only its briefing: its government, population, treasury and taxes, provinces, and its main burgs by name (the
+largest, as many as you set in Setup, plus every port and province seat); every regiment
 with its strength and where it stands; foreign forces on its soil; the other powers with their relation to it and
 rough strength; the recent chronicle; and what happened since its last orders. With *neighbors and states they have
 relations with*, states it has no relations with appear by name only.
