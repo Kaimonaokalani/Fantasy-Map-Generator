@@ -74,6 +74,26 @@ describe("briefing", () => {
     expect(text).toContain("This is the first turn");
   });
 
+  test("names the largest burgs, every port and every province seat, up to the referee's limit", () => {
+    const map = world();
+    map.provinces = [0, { i: 1, name: "Northmark", burg: 5 }];
+    map.states[1].provinces = [1];
+    for (let i = 3; i <= 6; i++)
+      map.burgs.push({ i, name: `Town${i}`, state: 1, x: i, y: i, population: 10 - i, port: i === 6 ? 1 : 0 });
+    const game = gameWith(1);
+    game.settings.burgs = 2;
+    const limited = buildBriefing(game, 1, map);
+    expect(limited).toContain("Your 4 main burgs");
+    expect(limited).toContain(
+      "Vel (30,000, capital, port); Town3 (7,000); Town5 (5,000, seat of Northmark); Town6 (4,000, port)"
+    );
+    expect(limited).not.toContain("Town4");
+    game.settings.burgs = 0;
+    expect(buildBriefing(game, 1, map)).toContain(
+      "- Your burgs: Vel (30,000, capital, port); Town3 (7,000); Town4 (6,000)"
+    );
+  });
+
   test("hides the details of states a nation has no relations with, unless the fog is lifted", () => {
     const game = gameWith(1);
     const hidden = buildBriefing(game, 1, world());
