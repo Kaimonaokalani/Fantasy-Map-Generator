@@ -42,7 +42,8 @@ Open **Tools → AI Nations** (or search for "AI Nations").
 ## What a nation knows
 
 Only its briefing: its government, population, treasury and taxes, provinces, and its main burgs by name (the
-largest, as many as you set in Setup, plus every port and province seat); every regiment
+largest, as many as you set in Setup, plus every port and province seat); the peoples, faiths and terrain its land is
+made of, and the leading ones of each neighbour; every regiment
 with its strength and where it stands; foreign forces on its soil; the other powers with their relation to it and
 rough strength; the recent chronicle; and what happened since its last orders. With *neighbors and states they have
 relations with*, states it has no relations with appear by name only.
